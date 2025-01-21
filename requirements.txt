@@ -1,0 +1,9 @@
+flask 
+anthropic 
+Pillow 
+PyMuPDF 
+pandas 
+openpyxl
+werkzeug
+PyPDF2
+python-dotenv
