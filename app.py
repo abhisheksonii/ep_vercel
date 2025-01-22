@@ -21,6 +21,8 @@ def create_app():
     
     # Use /tmp directory for file uploads on Render
     UPLOAD_FOLDER = tempfile.gettempdir()
+    # UPLOAD_FOLDER = os.path.join(os.getcwd(), 'uploads')
+    os.makedirs(UPLOAD_FOLDER, exist_ok=True)
     ALLOWED_EXTENSIONS = {'pdf', 'jpg', 'png', 'jpeg'}
     app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
     app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max file size

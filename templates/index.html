@@ -225,6 +225,41 @@
             .info-container {
                 flex-direction: column;
             }
+            .form-group {
+    position: relative;
+    margin-bottom: 15px;
+}
+
+.form-group input {
+    width: calc(100% - 40px) !important; /* Make space for button */
+    padding-right: 35px;
+}
+
+.copy-btn {
+    position: absolute;
+    right: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 30px;
+    height: 30px;
+    border: 1px solid #ddd;
+    background-color: white;
+    border-radius: 4px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-top: 12px;
+    transition: all 0.3s ease;
+}
+
+.copy-btn:hover {
+    background-color: #f0f0f0;
+}
+
+.copy-btn:active {
+    background-color: #e0e0e0;
+}
         }
     </style>
 </head>
@@ -581,7 +616,51 @@
         alert('No data available to download');
     }
 }
+        // Function to handle copying text
+function copyToClipboard(text, button) {
+    navigator.clipboard.writeText(text).then(() => {
+        // Store original button text
+        const originalText = button.innerHTML;
+        
+        // Change button text/icon to show success
+        button.innerHTML = '✓';
+        button.style.backgroundColor = '#4CAF50';
+        button.style.color = 'white';
+        
+        // Revert button back to original state after 1 second
+        setTimeout(() => {
+            button.innerHTML = originalText;
+            button.style.backgroundColor = '';
+            button.style.color = '';
+        }, 1000);
+    }).catch(err => {
+        console.error('Failed to copy text: ', err);
+        alert('Failed to copy text to clipboard');
+    });
+}
 
+// Function to add copy buttons to all input fields
+function addCopyButtons() {
+    const formGroups = document.querySelectorAll('.form-group');
+    
+    formGroups.forEach(group => {
+        const input = group.querySelector('input');
+        if (input) {
+            // Create copy button
+            const copyBtn = document.createElement('button');
+            copyBtn.innerHTML = '📋';
+            copyBtn.className = 'copy-btn';
+            copyBtn.type = 'button'; // Prevent form submission
+            copyBtn.onclick = () => copyToClipboard(input.value, copyBtn);
+            
+            // Insert button after input
+            input.parentNode.insertBefore(copyBtn, input.nextSibling);
+        }
+    });
+}
+
+// Call function when document is loaded
+        document.addEventListener('DOMContentLoaded', addCopyButtons);
         // Auto-hide error messages
         document.addEventListener('DOMContentLoaded', function() {
             const errorMessages = document.querySelectorAll('.error-message');
