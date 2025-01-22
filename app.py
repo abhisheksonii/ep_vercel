@@ -6,7 +6,8 @@ import anthropic
 import tempfile
 from PIL import Image
 from dotenv import load_dotenv
-from flask import Flask, request, render_template, jsonify, flash, redirect, url_for, send_file
+from flask import Flask, request, render_template, jsonify, flash, redirect, url_for, send_file, session
+from functools import wraps
 from io import BytesIO
 from werkzeug.utils import secure_filename
 from pdf2image import convert_from_path
@@ -24,8 +25,41 @@ def create_app():
     app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
     app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max file size
     
+    # Authentication credentials
+    USERNAME = "epgroup"
+    PASSWORD = "epgroup123"
+    
     logging.basicConfig(level=logging.INFO)
     logger = logging.getLogger(__name__)
+
+    # Login required decorator
+    def login_required(f):
+        @wraps(f)
+        def decorated_function(*args, **kwargs):
+            if 'logged_in' not in session:
+                return redirect(url_for('login'))
+            return f(*args, **kwargs)
+        return decorated_function
+
+    @app.route('/login', methods=['GET', 'POST'])
+    def login():
+        if request.method == 'POST':
+            username = request.form.get('username')
+            password = request.form.get('password')
+            
+            if username == USERNAME and password == PASSWORD:
+                session['logged_in'] = True
+                return redirect(url_for('index'))
+            else:
+                flash('Invalid username or password')
+                return redirect(url_for('login'))
+        
+        return render_template('login.html')
+
+    @app.route('/logout')
+    def logout():
+        session.pop('logged_in', None)
+        return redirect(url_for('login'))
 
     def allowed_file(filename):
         return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
@@ -188,10 +222,12 @@ def create_app():
             return structured_data
 
     @app.route('/')
+    @login_required
     def index():
         return render_template('index.html', data=None)
 
     @app.route('/upload', methods=['POST'])
+    @login_required
     def upload_file():
         if 'files' not in request.files:
             flash('No file part')
@@ -204,19 +240,17 @@ def create_app():
             return redirect(request.url)
 
         all_data = []
-        temp_files = []  # Keep track of temporary files
+        temp_files = []
 
         try:
             for file in files:
                 if file and allowed_file(file.filename):
                     filename = secure_filename(file.filename)
                     
-                    # Create a temporary file
                     temp_fd, temp_path = tempfile.mkstemp(suffix=os.path.splitext(filename)[1])
-                    temp_files.append(temp_path)  # Add to list for cleanup
+                    temp_files.append(temp_path)
                     
                     try:
-                        # Save uploaded file to temporary location
                         with os.fdopen(temp_fd, 'wb') as tmp:
                             file.save(tmp)
                         
@@ -237,7 +271,6 @@ def create_app():
                     return redirect(url_for('index'))
 
         finally:
-            # Clean up temporary files
             for temp_file in temp_files:
                 try:
                     os.unlink(temp_file)
@@ -247,16 +280,15 @@ def create_app():
         return render_template('index.html', data=all_data[0] if all_data else None)
 
     @app.route('/save_report', methods=['POST'])
+    @login_required
     def save_report():
         try:
             report_data = request.json
             if not report_data:
                 return jsonify({"error": "No data provided"}), 400
             
-            # Generate the HTML report with the updated data
             report_html = render_template('report.html', data=report_data)
             
-            # Save to temporary file
             with tempfile.NamedTemporaryFile(delete=False, suffix='.html') as temp_file:
                 temp_file.write(report_html.encode())
                 
@@ -265,21 +297,19 @@ def create_app():
             return jsonify({"error": str(e)}), 500
 
     @app.route('/download_report', methods=['POST'])
+    @login_required
     def download_report():
         try:
             report_data = request.json
             if not report_data:
                 return jsonify({"error": "No data provided"}), 400
 
-            # Generate the HTML report
             report_html = render_template('report.html', data=report_data)
 
-            # Create temporary file
             with tempfile.NamedTemporaryFile(delete=False, suffix='.html') as temp_file:
                 temp_file.write(report_html.encode())
                 temp_file.flush()
 
-                # Return the file for download
                 return send_file(
                     temp_file.name,
                     as_attachment=True,
