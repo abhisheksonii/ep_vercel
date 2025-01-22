@@ -67,6 +67,7 @@ class PDFVisionProcessor:
         except Exception as e:
             logger.error(f"File to image conversion failed: {str(e)}")
             raise PDFProcessingError(f"Failed to convert file to images: {str(e)}")
+
     def encode_image_to_base64(self, image):
         if not isinstance(image, Image.Image):
             raise PDFProcessingError("Invalid image format")
@@ -189,7 +190,6 @@ class PDFVisionProcessor:
 def index():
     return render_template('index.html', data=None)
 
-
 @app.route('/upload', methods=['POST'])
 def upload_file():
     if 'files' not in request.files:
@@ -277,4 +277,5 @@ def download_report():
         return jsonify({"error": str(e)}), 500
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 3000)))
+    port = int(os.environ.get('PORT', 3000))
+    app.run(host='0.0.0.0', port=port)
