@@ -25,14 +25,12 @@ def create_app():
     app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
     app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max file size
     
-    # Authentication credentials
     USERNAME = "epgroup"
     PASSWORD = "epgroup123"
     
     logging.basicConfig(level=logging.INFO)
     logger = logging.getLogger(__name__)
 
-    # Login required decorator
     def login_required(f):
         @wraps(f)
         def decorated_function(*args, **kwargs):
@@ -81,39 +79,54 @@ def create_app():
                 logger.error(f"Failed to initialize Anthropic client: {str(e)}")
                 raise PDFProcessingError(f"Failed to initialize Anthropic client: {str(e)}")
 
-        def convert_file_to_images(self, file_path):
-            if not os.path.exists(file_path):
-                raise PDFProcessingError("File not found")
+        def validate_json_structure(self, data):
+            required_fields = [
+                "inbound_delivery_no", "shipment_no", "shipping_cost_doc_no",
+                "vendor", "vendor_name", "vessel_name", "eta_date",
+                "port_arrival", "port_departure", "shipping_line",
+                "bill_of_lading", "invoice_no", "invoice_date",
+                "invoice_value", "mode_of_pay", "lc_no", "due_date",
+                "bank_ref_no", "container_numbers", "no_of_cartons",
+                "gross_weight", "product_details"
+            ]
+            
+            product_fields = [
+                "item", "sap_code", "description", "tariff_code",
+                "quantity_uom", "packaging", "po_no", "item_no"
+            ]
 
+            # Check for required top-level fields
+            for field in required_fields:
+                if field not in data:
+                    data[field] = ""  # Set empty string for missing fields
+
+            # Ensure product_details is a list
+            if not isinstance(data.get("product_details"), list):
+                data["product_details"] = []
+
+            # Validate each product in product_details
+            for product in data["product_details"]:
+                for field in product_fields:
+                    if field not in product:
+                        product[field] = ""  # Set empty string for missing fields
+
+            return data
+
+        def extract_json_from_text(self, text):
             try:
-                images = []
-                if file_path.endswith('.pdf'):
-                    # Convert PDF to images
-                    pdf_images = convert_from_path(file_path)
-                    images.extend(pdf_images)
-                else:
-                    # Handle regular image files
-                    image = Image.open(file_path)
-                    images = [image]
-
-                if not images:
-                    raise PDFProcessingError("No images extracted from file")
-                return images
-            except Exception as e:
-                logger.error(f"File to image conversion failed: {str(e)}")
-                raise PDFProcessingError(f"Failed to convert file to images: {str(e)}")
-
-        def encode_image_to_base64(self, image):
-            if not isinstance(image, Image.Image):
-                raise PDFProcessingError("Invalid image format")
-
-            try:
-                buffered = BytesIO()
-                image.save(buffered, format="JPEG")
-                return base64.b64encode(buffered.getvalue()).decode('utf-8')
-            except Exception as e:
-                logger.error(f"Image encoding failed: {str(e)}")
-                raise PDFProcessingError(f"Failed to encode image to base64: {str(e)}")
+                # Try to find JSON object in the text
+                start_idx = text.find('{')
+                end_idx = text.rfind('}')
+                
+                if start_idx == -1 or end_idx == -1:
+                    raise PDFProcessingError("No JSON object found in response")
+                
+                json_str = text[start_idx:end_idx + 1]
+                return json.loads(json_str)
+            except json.JSONDecodeError as e:
+                logger.error(f"JSON parsing error: {str(e)}")
+                logger.error(f"Raw text: {text}")
+                raise PDFProcessingError("Failed to parse JSON from response")
 
         def process_with_claude(self, image_base64):
             if not image_base64:
@@ -136,7 +149,7 @@ def create_app():
                             },
                             {
                                 "type": "text",
-                                "text": """Extract all the information from this image and format it as a JSON object with the following structure:
+                                "text": """Extract all the information from this image and format it ONLY as a JSON object with the following structure - DO NOT include any other text or explanation:
 {
     "inbound_delivery_no": "",
     "shipment_no": "",
@@ -177,49 +190,60 @@ def create_app():
                     }]
                 )
 
-                if hasattr(message, 'content') and isinstance(message.content, list):
-                    for content in message.content:
-                        if hasattr(content, 'text'):
-                            try:
-                                extracted_data = json.loads(content.text)
-                                return self.map_data_to_structure(extracted_data)
-                            except json.JSONDecodeError as e:
-                                logger.error(f"JSON decode error: {str(e)}")
-                                logger.error(f"Raw text content: {content.text}")
-                                raise PDFProcessingError(f"Failed to parse JSON response: {str(e)}")
-                
+                if not hasattr(message, 'content') or not message.content:
+                    raise PDFProcessingError("Empty response from Claude")
+
+                for content in message.content:
+                    if hasattr(content, 'text'):
+                        try:
+                            # Extract JSON from text and validate structure
+                            extracted_data = self.extract_json_from_text(content.text)
+                            validated_data = self.validate_json_structure(extracted_data)
+                            return validated_data
+                        except json.JSONDecodeError as e:
+                            logger.error(f"JSON decode error: {str(e)}")
+                            logger.error(f"Raw text content: {content.text}")
+                            raise PDFProcessingError(f"Failed to parse JSON response: {str(e)}")
+
                 raise PDFProcessingError("No valid text content found in Claude's response")
-                
+
             except Exception as e:
                 logger.error(f"Claude Vision API processing failed: {str(e)}")
                 raise PDFProcessingError(f"Failed to process with Claude Vision API: {str(e)}")
 
-        def map_data_to_structure(self, extracted_data):
-            structured_data = {
-                "inbound_delivery_no": extracted_data.get("inbound_delivery_no", ""),
-                "shipment_no": extracted_data.get("shipment_no", ""),
-                "shipping_cost_doc_no": extracted_data.get("shipping_cost_doc_no", ""),
-                "vendor": extracted_data.get("vendor", ""),
-                "vendor_name": extracted_data.get("vendor_name", ""),
-                "vessel_name": extracted_data.get("vessel_name", ""),
-                "eta_date": extracted_data.get("eta_date", ""),
-                "port_arrival": extracted_data.get("port_arrival", ""),
-                "port_departure": extracted_data.get("port_departure", ""),
-                "shipping_line": extracted_data.get("shipping_line", ""),
-                "bill_of_lading": extracted_data.get("bill_of_lading", ""),
-                "invoice_no": extracted_data.get("invoice_no", ""),
-                "invoice_date": extracted_data.get("invoice_date", ""),
-                "invoice_value": extracted_data.get("invoice_value", ""),
-                "mode_of_pay": extracted_data.get("mode_of_pay", ""),
-                "lc_no": extracted_data.get("lc_no", ""),
-                "due_date": extracted_data.get("due_date", ""),
-                "bank_ref_no": extracted_data.get("bank_ref_no", ""),
-                "container_numbers": extracted_data.get("container_numbers", ""),
-                "no_of_cartons": extracted_data.get("no_of_cartons", ""),
-                "gross_weight": extracted_data.get("gross_weight", ""),
-                "product_details": extracted_data.get("product_details", [])
-            }
-            return structured_data
+        def convert_file_to_images(self, file_path):
+            if not os.path.exists(file_path):
+                raise PDFProcessingError("File not found")
+
+            try:
+                images = []
+                if file_path.endswith('.pdf'):
+                    # Convert PDF to images
+                    pdf_images = convert_from_path(file_path)
+                    images.extend(pdf_images)
+                else:
+                    # Handle regular image files
+                    image = Image.open(file_path)
+                    images = [image]
+
+                if not images:
+                    raise PDFProcessingError("No images extracted from file")
+                return images
+            except Exception as e:
+                logger.error(f"File to image conversion failed: {str(e)}")
+                raise PDFProcessingError(f"Failed to convert file to images: {str(e)}")
+
+        def encode_image_to_base64(self, image):
+            if not isinstance(image, Image.Image):
+                raise PDFProcessingError("Invalid image format")
+
+            try:
+                buffered = BytesIO()
+                image.save(buffered, format="JPEG")
+                return base64.b64encode(buffered.getvalue()).decode('utf-8')
+            except Exception as e:
+                logger.error(f"Image encoding failed: {str(e)}")
+                raise PDFProcessingError(f"Failed to encode image to base64: {str(e)}")
 
     @app.route('/')
     @login_required
@@ -240,17 +264,19 @@ def create_app():
             return redirect(request.url)
 
         all_data = []
-        temp_files = []
+        temp_files = []  # Keep track of temporary files
 
         try:
             for file in files:
                 if file and allowed_file(file.filename):
                     filename = secure_filename(file.filename)
                     
+                    # Create a temporary file
                     temp_fd, temp_path = tempfile.mkstemp(suffix=os.path.splitext(filename)[1])
-                    temp_files.append(temp_path)
+                    temp_files.append(temp_path)  # Add to list for cleanup
                     
                     try:
+                        # Save uploaded file to temporary location
                         with os.fdopen(temp_fd, 'wb') as tmp:
                             file.save(tmp)
                         
@@ -271,6 +297,7 @@ def create_app():
                     return redirect(url_for('index'))
 
         finally:
+            # Clean up temporary files
             for temp_file in temp_files:
                 try:
                     os.unlink(temp_file)
@@ -287,8 +314,10 @@ def create_app():
             if not report_data:
                 return jsonify({"error": "No data provided"}), 400
             
+            # Generate the HTML report with the updated data
             report_html = render_template('report.html', data=report_data)
             
+            # Save to temporary file
             with tempfile.NamedTemporaryFile(delete=False, suffix='.html') as temp_file:
                 temp_file.write(report_html.encode())
                 
@@ -304,12 +333,15 @@ def create_app():
             if not report_data:
                 return jsonify({"error": "No data provided"}), 400
 
+            # Generate the HTML report
             report_html = render_template('report.html', data=report_data)
 
+            # Create temporary file
             with tempfile.NamedTemporaryFile(delete=False, suffix='.html') as temp_file:
                 temp_file.write(report_html.encode())
                 temp_file.flush()
 
+                # Return the file for download
                 return send_file(
                     temp_file.name,
                     as_attachment=True,
