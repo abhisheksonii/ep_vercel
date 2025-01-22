@@ -192,6 +192,7 @@ class PDFVisionProcessor:
 def index():
     return render_template('index.html', data=None)
 
+
 @app.route('/upload', methods=['POST'])
 def upload_file():
     if 'files' not in request.files:
@@ -235,24 +236,48 @@ def upload_file():
 
     return render_template('index.html', data=all_data[0] if all_data else None)
 
-@app.route('/download_report')
+@app.route('/save_report', methods=['POST'])
+def save_report():
+    try:
+        report_data = request.json
+        if not report_data:
+            return jsonify({"error": "No data provided"}), 400
+        
+        # Generate the HTML report with the updated data
+        report_html = render_template('report.html', data=report_data)
+        
+        # Save to temporary file
+        with tempfile.NamedTemporaryFile(delete=False, suffix='.html') as temp_file:
+            temp_file.write(report_html.encode())
+            
+        return jsonify({"message": "Report saved successfully"}), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/download_report', methods=['POST'])
 def download_report():
-    if 'data' not in request.args or not request.args['data']:
-        flash('No data available to download')
-        return redirect(url_for('index'))
+    try:
+        report_data = request.json
+        if not report_data:
+            return jsonify({"error": "No data provided"}), 400
 
-    data = json.loads(request.args['data'])
+        # Generate the HTML report
+        report_html = render_template('report.html', data=report_data)
 
-    # Generate the HTML report
-    report_html = render_template('report.html', data=data)
+        # Create temporary file
+        with tempfile.NamedTemporaryFile(delete=False, suffix='.html') as temp_file:
+            temp_file.write(report_html.encode())
+            temp_file.flush()
 
-    # Save the report to a temporary file
-    with tempfile.NamedTemporaryFile(delete=False, suffix='.html') as temp_file:
-        temp_file.write(report_html.encode())
-        temp_file.flush()
-
-        # Return the report for download
-        return send_file(temp_file.name, as_attachment=True, download_name='report.html')
+            # Return the file for download
+            return send_file(
+                temp_file.name,
+                as_attachment=True,
+                download_name='shipment_report.html',
+                mimetype='text/html'
+            )
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 if __name__ == '__main__':
     app.run(debug=True)

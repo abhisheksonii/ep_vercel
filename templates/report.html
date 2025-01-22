@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Shipment Report</title>
+    <style>
+        body {
+            font-family: 'Courier New', monospace;
+            padding: 20px;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .shipment-notification {
+            border: 1px solid #000;
+            padding: 15px;
+            margin-top: 20px;
+            font-size: 12px;
+        }
+
+        .notification-header {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 15px;
+            border-bottom: 1px solid #000;
+            padding-bottom: 5px;
+        }
+
+        .info-container {
+            display: flex;
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+
+        .info-section {
+            flex: 1;
+            border: 1px solid #000;
+            padding: 10px;
+        }
+
+        .info-row {
+            margin-bottom: 5px;
+        }
+
+        .bold-text {
+            font-weight: bold;
+        }
+
+        .product-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+            font-size: 12px;
+        }
+
+        .product-table th,
+        .product-table td {
+            border: 1px solid #000;
+            padding: 5px;
+            text-align: left;
+        }
+
+        .shipment-details {
+            margin-top: 20px;
+            margin-bottom: 20px;
+        }
+
+        @media print {
+            body {
+                padding: 0;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="shipment-notification">
+        <div style="text-transform: uppercase; margin-bottom: 10px;">Repeat print</div>
+        
+        <div class="notification-header">
+            <div class="notification-title">SHIPMENT NOTIFICATION</div>
+            <div class="page-number">Page:1 of 1</div>
+        </div>
+
+        <div class="info-container">
+            <div class="info-section">
+                <div class="info-row bold-text">INBOUND DELIVERY No. {{ data.inbound_delivery_no }}</div>
+                <div class="info-row bold-text">SHIPMENT No. {{ data.shipment_no }}</div>
+                <div class="info-row bold-text">SHIPPING COST DOC No. {{ data.shipping_cost_doc_no }}</div>
+                <div class="info-row">Vendor: {{ data.vendor }}</div>
+                <div class="info-row" style="text-transform: uppercase;">{{ data.vendor_name }}</div>
+                <div class="info-row">Vessel Name: {{ data.vessel_name }}</div>
+                <div class="info-row">ETA Date: {{ data.eta_date }}</div>
+                <div class="info-row">Port of Arrival: {{ data.port_arrival }}</div>
+                <div class="info-row">Port of Departure: {{ data.port_departure }}</div>
+                <div class="info-row">Shipping Line: {{ data.shipping_line }}</div>
+                <div class="info-row">Bill of Lading: {{ data.bill_of_lading }}</div>
+            </div>
+
+            <div class="info-section">
+                <div class="bold-text" style="margin-bottom: 10px;">Invoice Details:</div>
+                <div class="info-row">Invoice No: {{ data.invoice_no }}</div>
+                <div class="info-row">Invoice Dt: {{ data.invoice_date }}</div>
+                <div class="info-row">Invoice Value: {{ data.invoice_value }}</div>
+                <div class="info-row">Mode Of Pay: {{ data.mode_of_pay }}</div>
+                <div class="info-row">LC No.: {{ data.lc_no }}</div>
+                <div class="info-row">Due Date: {{ data.due_date }}</div>
+                <div class="info-row">Bank Ref No.: {{ data.bank_ref_no }}</div>
+            </div>
+        </div>
+
+        <div class="shipment-details">
+            <div class="bold-text" style="margin-bottom: 10px;">Shipment Details:</div>
+            <div class="info-row">Container Numbers: {{ data.container_numbers }}</div>
+            <div class="info-row">No. Of Cartons: {{ data.no_of_cartons }}</div>
+            <div class="info-row">Gross Weight: {{ data.gross_weight }}</div>
+        </div>
+
+        <table class="product-table">
+            <thead>
+                <tr>
+                    <th>Item</th>
+                    <th>SAP Code</th>
+                    <th>Description</th>
+                    <th>Tariff Code</th>
+                    <th>Quantity & UOM</th>
+                    <th>Packaging</th>
+                    <th>PO No</th>
+                    <th>Item No</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% if data.product_details %}
+                    {% for product in data.product_details %}
+                    <tr>
+                        <td>{{ product.item }}</td>
+                        <td>{{ product.sap_code }}</td>
+                        <td>{{ product.description }}</td>
+                        <td>{{ product.tariff_code }}</td>
+                        <td style="text-align: right;">{{ product.quantity_uom }}</td>
+                        <td>{{ product.packaging }}</td>
+                        <td>{{ product.po_no }}</td>
+                        <td>{{ product.item_no }}</td>
+                    </tr>
+                    {% endfor %}
+                {% endif %}
+            </tbody>
+        </table>
+    </div>
+</body>
+</html>
