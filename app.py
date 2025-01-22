@@ -19,7 +19,7 @@ app.secret_key = os.urandom(24)
 logging.basicConfig(level=logging.ERROR)
 logger = logging.getLogger(__name__)
 
-UPLOAD_FOLDER = 'uploads'
+UPLOAD_FOLDER = '/tmp/uploads'
 ALLOWED_EXTENSIONS = {'pdf', 'jpg', 'png', 'jpeg'}
 
 if not os.path.exists(UPLOAD_FOLDER):
