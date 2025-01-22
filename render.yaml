@@ -1,0 +1,15 @@
+# render.yaml
+services:
+  - type: web
+    name: ep-vercel
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn --config gunicorn_config.py "app:create_app()"
+    envVars:
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: PORT
+        value: 3000
+      - key: WEB_CONCURRENCY
+        value: 4
+    healthCheckPath: /
