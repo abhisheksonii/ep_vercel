@@ -1,8 +1,8 @@
-flask==2.3.3
-anthropic==0.7.0
-Pillow==10.0.0
-python-dotenv==1.0.0
-pdf2image==1.16.3
-Werkzeug==2.3.7
-poppler-utils==0.1.0
-gunicorn==21.2.0
+flask
+anthropic
+Pillow
+python-dotenv
+pdf2image
+Werkzeug
+poppler-utils
+gunicorn
