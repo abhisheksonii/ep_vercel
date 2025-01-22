@@ -40,7 +40,9 @@ def create_app():
                 raise PDFProcessingError("ANTHROPIC_API_KEY not found in environment variables")
 
             try:
-                self.client = anthropic.Client(api_key=api_key)
+                self.client = anthropic.Anthropic(
+                    api_key=api_key
+                )
             except Exception as e:
                 logger.error(f"Failed to initialize Anthropic client: {str(e)}")
                 raise PDFProcessingError(f"Failed to initialize Anthropic client: {str(e)}")
@@ -101,41 +103,41 @@ def create_app():
                             {
                                 "type": "text",
                                 "text": """Extract all the information from this image and format it as a JSON object with the following structure:
+{
+    "inbound_delivery_no": "",
+    "shipment_no": "",
+    "shipping_cost_doc_no": "",
+    "vendor": "",
+    "vendor_name": "",
+    "vessel_name": "",
+    "eta_date": "",
+    "port_arrival": "",
+    "port_departure": "",
+    "shipping_line": "",
+    "bill_of_lading": "",
+    "invoice_no": "",
+    "invoice_date": "",
+    "invoice_value": "",
+    "mode_of_pay": "",
+    "lc_no": "",
+    "due_date": "",
+    "bank_ref_no": "",
+    "container_numbers": "",
+    "no_of_cartons": "",
+    "gross_weight": "",
+    "product_details": [
         {
-            "inbound_delivery_no": "",
-            "shipment_no": "",
-            "shipping_cost_doc_no": "",
-            "vendor": "",
-            "vendor_name": "",
-            "vessel_name": "",
-            "eta_date": "",
-            "port_arrival": "",
-            "port_departure": "",
-            "shipping_line": "",
-            "bill_of_lading": "",
-            "invoice_no": "",
-            "invoice_date": "",
-            "invoice_value": "",
-            "mode_of_pay": "",
-            "lc_no": "",
-            "due_date": "",
-            "bank_ref_no": "",
-            "container_numbers": "",
-            "no_of_cartons": "",
-            "gross_weight": "",
-            "product_details": [
-                {
-                    "item": "",
-                    "sap_code": "",
-                    "description": "",
-                    "tariff_code": "",
-                    "quantity_uom": "",
-                    "packaging": "",
-                    "po_no": "",
-                    "item_no": ""
-                }
-            ]
-        }"""
+            "item": "",
+            "sap_code": "",
+            "description": "",
+            "tariff_code": "",
+            "quantity_uom": "",
+            "packaging": "",
+            "po_no": "",
+            "item_no": ""
+        }
+    ]
+}"""
                             }
                         ]   
                     }]
@@ -292,7 +294,6 @@ def create_app():
 # Create the application instance
 app = create_app()
 
-# This ensures that the app is created when running locally
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 3000))
     app.run(host='0.0.0.0', port=port)
