@@ -2,7 +2,7 @@ import os
 import base64
 import json
 import logging
-import fitz  # PyMuPDF
+
 import anthropic
 import tempfile
 from PIL import Image
@@ -10,6 +10,8 @@ from dotenv import load_dotenv
 from flask import Flask, request, render_template, jsonify, flash, redirect, url_for, send_file
 from io import BytesIO
 from werkzeug.utils import secure_filename
+from pdf2image import convert_from_path
+from PIL import Image
 
 # Load environment variables
 load_dotenv()
@@ -51,14 +53,11 @@ class PDFVisionProcessor:
         try:
             images = []
             if file_path.endswith('.pdf'):
-                pdf_document = fitz.open(file_path)
-                for page_num in range(pdf_document.page_count):
-                    page = pdf_document[page_num]
-                    pix = page.get_pixmap()
-                    img_data = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
-                    images.append(img_data)
-                pdf_document.close()
+                # Convert PDF to images
+                pdf_images = convert_from_path(file_path)
+                images.extend(pdf_images)
             else:
+                # Handle regular image files
                 image = Image.open(file_path)
                 images = [image]
 
@@ -68,7 +67,6 @@ class PDFVisionProcessor:
         except Exception as e:
             logger.error(f"File to image conversion failed: {str(e)}")
             raise PDFProcessingError(f"Failed to convert file to images: {str(e)}")
-
     def encode_image_to_base64(self, image):
         if not isinstance(image, Image.Image):
             raise PDFProcessingError("Invalid image format")
