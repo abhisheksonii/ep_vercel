@@ -433,35 +433,93 @@
     });
 
     function collectReportData() {
-        const editableElements = document.querySelectorAll('[contenteditable="true"]');
-        const data = {};
+    const data = {
+        inbound_delivery_no: '',
+        shipment_no: '',
+        shipping_cost_doc_no: '',
+        vendor: '',
+        vendor_name: '',
+        vessel_name: '',
+        eta_date: '',
+        port_arrival: '',
+        port_departure: '',
+        shipping_line: '',
+        bill_of_lading: '',
+        invoice_no: '',
+        invoice_date: '',
+        invoice_value: '',
+        mode_of_pay: '',
+        lc_no: '',
+        due_date: '',
+        bank_ref_no: '',
+        container_numbers: '',
+        no_of_cartons: '',
+        gross_weight: '',
+        product_details: []
+    };
 
-        editableElements.forEach(element => {
-            const label = element.parentElement.textContent.split(':')[0].trim().toLowerCase().replace(/\s+/g, '_');
-            data[label] = element.textContent.trim();
-        });
+    // Map specific field IDs to their corresponding data properties
+    const fieldMappings = {
+        'INBOUND DELIVERY No.': 'inbound_delivery_no',
+        'SHIPMENT No.': 'shipment_no',
+        'SHIPPING COST DOC No.': 'shipping_cost_doc_no',
+        'Vendor:': 'vendor',
+        'Vessel Name:': 'vessel_name',
+        'ETA Date:': 'eta_date',
+        'Port of Arrival:': 'port_arrival',
+        'Port of Departure:': 'port_departure',
+        'Shipping Line:': 'shipping_line',
+        'Bill of Ladding:': 'bill_of_lading',
+        'Invoice No:': 'invoice_no',
+        'Invoice Dt:': 'invoice_date',
+        'Invoice Value:': 'invoice_value',
+        'Mode Of Pay:': 'mode_of_pay',
+        'LC No.:': 'lc_no',
+        'Due Date:': 'due_date',
+        'Bank Ref No.:': 'bank_ref_no',
+        'Container Numbers:': 'container_numbers',
+        'No. Of Cartons:': 'no_of_cartons',
+        'Gross Weight:': 'gross_weight'
+    };
 
-        const productTable = document.querySelector('.product-table tbody');
-        const productDetails = [];
-        if (productTable) {
-            productTable.querySelectorAll('tr').forEach(row => {
-                const product = {
-                    item: row.cells[0].textContent.trim(),
-                    sap_code: row.cells[1].textContent.trim(),
-                    description: row.cells[2].textContent.trim(),
-                    tariff_code: row.cells[3].textContent.trim(),
-                    quantity_uom: row.cells[4].textContent.trim(),
-                    packaging: row.cells[5].textContent.trim(),
-                    po_no: row.cells[6].textContent.trim(),
-                    item_no: row.cells[7].textContent.trim()
-                };
-                productDetails.push(product);
-            });
+    // Get all editable elements
+    document.querySelectorAll('[contenteditable="true"]').forEach(element => {
+        // Get the parent element's text content
+        const parentText = element.parentElement.childNodes[0].textContent.trim();
+        
+        // Check if we have a mapping for this field
+        if (fieldMappings[parentText]) {
+            data[fieldMappings[parentText]] = element.textContent.trim();
         }
+        // Special handling for vendor name which doesn't have a label
+        else if (element.parentElement.style.textTransform === 'uppercase') {
+            data.vendor_name = element.textContent.trim();
+        }
+    });
 
-        data.product_details = productDetails;
-        return data;
+    // Collect product details
+    const productTable = document.querySelector('.product-table tbody');
+    if (productTable) {
+        productTable.querySelectorAll('tr').forEach(row => {
+            const product = {
+                item: row.cells[0].textContent.trim(),
+                sap_code: row.cells[1].textContent.trim(),
+                description: row.cells[2].textContent.trim(),
+                tariff_code: row.cells[3].textContent.trim(),
+                quantity_uom: row.cells[4].textContent.trim(),
+                packaging: row.cells[5].textContent.trim(),
+                po_no: row.cells[6].textContent.trim(),
+                item_no: row.cells[7].textContent.trim()
+            };
+            data.product_details.push(product);
+        });
     }
+
+    // Log the collected data for debugging
+    console.log('Collected report data:', data);
+    return data;
+}
+
 
         function saveReport() {
             const reportData = collectReportData();
@@ -488,8 +546,10 @@
         }
 
         function downloadReport() {
-        const reportData = collectReportData();
-
+    const reportData = collectReportData();
+    
+    // Validate that we have data before sending
+    if (Object.values(reportData).some(value => value !== '' && value !== null)) {
         fetch('/download_report', {
             method: 'POST',
             headers: {
@@ -497,7 +557,12 @@
             },
             body: JSON.stringify(reportData)
         })
-        .then(response => response.blob())
+        .then(response => {
+            if (!response.ok) {
+                throw new Error('Network response was not ok');
+            }
+            return response.blob();
+        })
         .then(blob => {
             const url = window.URL.createObjectURL(blob);
             const a = document.createElement('a');
@@ -510,9 +575,12 @@
         })
         .catch(error => {
             console.error('Error:', error);
-            alert('Failed to download report');
+            alert('Failed to download report: ' + error.message);
         });
+    } else {
+        alert('No data available to download');
     }
+}
 
         // Auto-hide error messages
         document.addEventListener('DOMContentLoaded', function() {
