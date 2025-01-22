@@ -16,16 +16,15 @@ load_dotenv()
 
 def create_app():
     app = Flask(__name__)
-    app.secret_key = os.urandom(24)
+    app.secret_key = os.environ.get('SECRET_KEY', os.urandom(24))
     
-    UPLOAD_FOLDER = '/tmp'
-    if not os.path.exists(UPLOAD_FOLDER):
-        os.makedirs(UPLOAD_FOLDER)
-    
+    # Use /tmp directory for file uploads on Render
+    UPLOAD_FOLDER = tempfile.gettempdir()
     ALLOWED_EXTENSIONS = {'pdf', 'jpg', 'png', 'jpeg'}
     app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+    app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max file size
     
-    logging.basicConfig(level=logging.ERROR)
+    logging.basicConfig(level=logging.INFO)
     logger = logging.getLogger(__name__)
 
     def allowed_file(filename):
@@ -203,33 +202,45 @@ def create_app():
             return redirect(request.url)
 
         all_data = []
-        for file in files:
-            if file and allowed_file(file.filename):
-                try:
+        temp_files = []  # Keep track of temporary files
+
+        try:
+            for file in files:
+                if file and allowed_file(file.filename):
                     filename = secure_filename(file.filename)
-                    filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-                    file.save(filepath)
+                    
+                    # Create a temporary file
+                    temp_fd, temp_path = tempfile.mkstemp(suffix=os.path.splitext(filename)[1])
+                    temp_files.append(temp_path)  # Add to list for cleanup
+                    
+                    try:
+                        # Save uploaded file to temporary location
+                        with os.fdopen(temp_fd, 'wb') as tmp:
+                            file.save(tmp)
+                        
+                        processor = PDFVisionProcessor()
+                        images = processor.convert_file_to_images(temp_path)
 
-                    processor = PDFVisionProcessor()
-                    images = processor.convert_file_to_images(filepath)
+                        for image in images:
+                            image_base64 = processor.encode_image_to_base64(image)
+                            extracted_data = processor.process_with_claude(image_base64)
+                            all_data.append(extracted_data)
 
-                    for image in images:
-                        image_base64 = processor.encode_image_to_base64(image)
-                        extracted_data = processor.process_with_claude(image_base64)
-                        all_data.append(extracted_data)
-
-                    # Cleanup
-                    os.remove(filepath)
-                except PDFProcessingError as e:
-                    flash(str(e))
+                    except Exception as e:
+                        logger.error(f"Processing error for file {filename}: {str(e)}")
+                        flash(f"Error processing {filename}: {str(e)}")
+                        return redirect(url_for('index'))
+                else:
+                    flash(f"Invalid file type: {file.filename}")
                     return redirect(url_for('index'))
+
+        finally:
+            # Clean up temporary files
+            for temp_file in temp_files:
+                try:
+                    os.unlink(temp_file)
                 except Exception as e:
-                    logger.error(f"Unexpected error: {str(e)}")
-                    flash(f"An unexpected error occurred: {str(e)}")
-                    return redirect(url_for('index'))
-            else:
-                flash(f"Invalid file type: {file.filename}")
-                return redirect(url_for('index'))
+                    logger.error(f"Error deleting temporary file {temp_file}: {str(e)}")
 
         return render_template('index.html', data=all_data[0] if all_data else None)
 
@@ -249,6 +260,7 @@ def create_app():
                 
             return jsonify({"message": "Report saved successfully"}), 200
         except Exception as e:
+            logger.error(f"Error saving report: {str(e)}")
             return jsonify({"error": str(e)}), 500
 
     @app.route('/download_report', methods=['POST'])
@@ -274,11 +286,19 @@ def create_app():
                     mimetype='text/html'
                 )
         except Exception as e:
+            logger.error(f"Error downloading report: {str(e)}")
             return jsonify({"error": str(e)}), 500
+
+        finally:
+            # Clean up temporary file after sending
+            try:
+                os.unlink(temp_file.name)
+            except Exception as e:
+                logger.error(f"Error deleting temporary file: {str(e)}")
 
     return app
 
-# This will only be used when running with Flask development server
 if __name__ == '__main__':
     app = create_app()
-    app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 3000)))
+    port = int(os.environ.get('PORT', 3000))
+    app.run(host='0.0.0.0', port=port)

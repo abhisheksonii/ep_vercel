@@ -1,5 +1,6 @@
-.env
 __pycache__/
 *.pyc
-/tmp/*
-.vercel
+.env
+.DS_Store
+venv/
+*.log
