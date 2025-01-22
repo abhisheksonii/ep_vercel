@@ -1,7 +1,4 @@
-
 .env
-
-.vercel
-uploads/
 __pycache__/
 *.pyc
+/tmp/*

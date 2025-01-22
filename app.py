@@ -19,11 +19,10 @@ app.secret_key = os.urandom(24)
 logging.basicConfig(level=logging.ERROR)
 logger = logging.getLogger(__name__)
 
-UPLOAD_FOLDER = '/tmp/uploads'
-ALLOWED_EXTENSIONS = {'pdf', 'jpg', 'png', 'jpeg'}
-
+UPLOAD_FOLDER = '/tmp'
 if not os.path.exists(UPLOAD_FOLDER):
     os.makedirs(UPLOAD_FOLDER)
+ALLOWED_EXTENSIONS = {'pdf', 'jpg', 'png', 'jpeg'}
 
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
@@ -280,4 +279,4 @@ def download_report():
         return jsonify({"error": str(e)}), 500
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 3000)))
