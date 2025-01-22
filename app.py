@@ -151,7 +151,7 @@ def create_app():
                                 logger.error(f"JSON decode error: {str(e)}")
                                 logger.error(f"Raw text content: {content.text}")
                                 raise PDFProcessingError(f"Failed to parse JSON response: {str(e)}")
-                        
+                
                 raise PDFProcessingError("No valid text content found in Claude's response")
                 
             except Exception as e:
@@ -260,7 +260,6 @@ def create_app():
                 
             return jsonify({"message": "Report saved successfully"}), 200
         except Exception as e:
-            logger.error(f"Error saving report: {str(e)}")
             return jsonify({"error": str(e)}), 500
 
     @app.route('/download_report', methods=['POST'])
@@ -286,19 +285,14 @@ def create_app():
                     mimetype='text/html'
                 )
         except Exception as e:
-            logger.error(f"Error downloading report: {str(e)}")
             return jsonify({"error": str(e)}), 500
-
-        finally:
-            # Clean up temporary file after sending
-            try:
-                os.unlink(temp_file.name)
-            except Exception as e:
-                logger.error(f"Error deleting temporary file: {str(e)}")
 
     return app
 
+# Create the application instance
+app = create_app()
+
+# This ensures that the app is created when running locally
 if __name__ == '__main__':
-    app = create_app()
     port = int(os.environ.get('PORT', 3000))
     app.run(host='0.0.0.0', port=port)
