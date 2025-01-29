@@ -21,7 +21,6 @@ def create_app():
     
     # Use /tmp directory for file uploads on Render
     UPLOAD_FOLDER = tempfile.gettempdir()
-    # UPLOAD_FOLDER = os.path.join(os.getcwd(), 'uploads')
     os.makedirs(UPLOAD_FOLDER, exist_ok=True)
     ALLOWED_EXTENSIONS = {'pdf', 'jpg', 'png', 'jpeg'}
     app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
@@ -32,37 +31,6 @@ def create_app():
     
     logging.basicConfig(level=logging.INFO)
     logger = logging.getLogger(__name__)
-
-    def login_required(f):
-        @wraps(f)
-        def decorated_function(*args, **kwargs):
-            if 'logged_in' not in session:
-                return redirect(url_for('login'))
-            return f(*args, **kwargs)
-        return decorated_function
-
-    @app.route('/login', methods=['GET', 'POST'])
-    def login():
-        if request.method == 'POST':
-            username = request.form.get('username')
-            password = request.form.get('password')
-            
-            if username == USERNAME and password == PASSWORD:
-                session['logged_in'] = True
-                return redirect(url_for('index'))
-            else:
-                flash('Invalid username or password')
-                return redirect(url_for('login'))
-        
-        return render_template('login.html')
-
-    @app.route('/logout')
-    def logout():
-        session.pop('logged_in', None)
-        return redirect(url_for('login'))
-
-    def allowed_file(filename):
-        return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
     class PDFProcessingError(Exception):
         pass
@@ -80,6 +48,25 @@ def create_app():
             except Exception as e:
                 logger.error(f"Failed to initialize Anthropic client: {str(e)}")
                 raise PDFProcessingError(f"Failed to initialize Anthropic client: {str(e)}")
+
+        def check_and_correct_orientation(self, image):
+            """
+            Check if image is horizontal and rotate if needed to make it vertical.
+            Returns the correctly oriented image.
+            """
+            try:
+                width, height = image.size
+                
+                # If width is greater than height, it's horizontal
+                if width > height:
+                    # Rotate 90 degrees clockwise to make it vertical
+                    image = image.rotate(-90, expand=True)
+                    logger.info("Image was horizontal, rotating to vertical orientation")
+                
+                return image
+            except Exception as e:
+                logger.error(f"Error checking/correcting image orientation: {str(e)}")
+                raise PDFProcessingError(f"Failed to process image orientation: {str(e)}")
 
         def validate_json_structure(self, data):
             required_fields = [
@@ -214,6 +201,7 @@ def create_app():
                 raise PDFProcessingError(f"Failed to process with Claude Vision API: {str(e)}")
 
         def convert_file_to_images(self, file_path):
+            """Convert PDF or image file to list of images with orientation correction"""
             if not os.path.exists(file_path):
                 raise PDFProcessingError("File not found")
 
@@ -222,11 +210,16 @@ def create_app():
                 if file_path.endswith('.pdf'):
                     # Convert PDF to images
                     pdf_images = convert_from_path(file_path)
-                    images.extend(pdf_images)
+                    # Check and correct orientation for each PDF page
+                    for image in pdf_images:
+                        corrected_image = self.check_and_correct_orientation(image)
+                        images.append(corrected_image)
                 else:
                     # Handle regular image files
                     image = Image.open(file_path)
-                    images = [image]
+                    # Check and correct orientation
+                    corrected_image = self.check_and_correct_orientation(image)
+                    images = [corrected_image]
 
                 if not images:
                     raise PDFProcessingError("No images extracted from file")
@@ -236,16 +229,51 @@ def create_app():
                 raise PDFProcessingError(f"Failed to convert file to images: {str(e)}")
 
         def encode_image_to_base64(self, image):
+            """Convert PIL Image to base64 string"""
             if not isinstance(image, Image.Image):
                 raise PDFProcessingError("Invalid image format")
 
             try:
                 buffered = BytesIO()
-                image.save(buffered, format="JPEG")
+                # Convert to RGB if image is in RGBA mode
+                if image.mode == 'RGBA':
+                    image = image.convert('RGB')
+                image.save(buffered, format="JPEG", quality=95)
                 return base64.b64encode(buffered.getvalue()).decode('utf-8')
             except Exception as e:
                 logger.error(f"Image encoding failed: {str(e)}")
                 raise PDFProcessingError(f"Failed to encode image to base64: {str(e)}")
+
+    def login_required(f):
+        @wraps(f)
+        def decorated_function(*args, **kwargs):
+            if 'logged_in' not in session:
+                return redirect(url_for('login'))
+            return f(*args, **kwargs)
+        return decorated_function
+
+    def allowed_file(filename):
+        return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
+    @app.route('/login', methods=['GET', 'POST'])
+    def login():
+        if request.method == 'POST':
+            username = request.form.get('username')
+            password = request.form.get('password')
+            
+            if username == USERNAME and password == PASSWORD:
+                session['logged_in'] = True
+                return redirect(url_for('index'))
+            else:
+                flash('Invalid username or password')
+                return redirect(url_for('login'))
+        
+        return render_template('login.html')
+
+    @app.route('/logout')
+    def logout():
+        session.pop('logged_in', None)
+        return redirect(url_for('login'))
 
     @app.route('/')
     @login_required
